@@ -5,6 +5,7 @@ import cors from "cors";
 import dotenv from "dotenv";
 import chatRoute from "./chatRoutes.js";
 import { authenticateSocket } from "./auth.js";
+import redis from "./redis.js";
 
 dotenv.config();
 const app = express();
@@ -26,10 +27,12 @@ setInterval(() => {
   });
 }, 30000);
 
-function broadcastOnlineUsers() {
+async function broadcastOnlineUsers() {
+  const users = await redis.smembers("online_users");
+
   const payload = JSON.stringify({
     type: "ONLINE_USERS",
-    payload: Array.from(onlineUsers),
+    payload: users,
   });
 
   for (const ws of clients.values()) {
@@ -39,7 +42,7 @@ function broadcastOnlineUsers() {
   }
 }
 
-wss.on("connection", (ws, req) => {
+wss.on("connection", async (ws, req) => {
   const user = authenticateSocket(req);
   console.log("user in wss connection--->", user);
 
@@ -49,15 +52,15 @@ wss.on("connection", (ws, req) => {
   }
   console.log(user);
   ws.userId = user.userId;
+
   clients.set(user.userId, ws);
-  onlineUsers.add(user.userId);
-  console.log(clients);
+  await redis.sadd("online_users", user.userId);
 
   broadcastOnlineUsers();
 
-  ws.on("close", () => {
+  ws.on("close", async () => {
     clients.delete(user.userId);
-    onlineUsers.delete(user.userId);
+    await redis.srem("online_users", user.userId);
     console.log("user in wss disconnecting--->");
   });
 });
@@ -69,6 +72,6 @@ app.use("/", (req, res) => {
   res.send(`WebSocket Server is running on ${PORT}`);
 });
 
-server.listen(PORT, "0.0.0.0", () => {
+server.listen(PORT, () => {
   console.log("WS server running on 8080");
 });

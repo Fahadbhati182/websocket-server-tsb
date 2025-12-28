@@ -1,29 +1,29 @@
+import redis from "./redis.js";
 import { clients } from "./server.js";
-import { conversationMembers } from "./store.js";
 
-export const ConversationInitialization = (req, res) => {
+export const ConversationInitialization = async (req, res) => {
   try {
     const { conversationId, userId } = req.body;
 
-    if (!conversationMembers.has(conversationId)) {
-      conversationMembers.set(conversationId, new Set());
-    }
-    conversationMembers.get(conversationId).add(userId);
+    await redis.sadd(`conversation:${conversationId}`, userId);   
+
     console.log(
-      "conversationMembers during conversation initialization----->",
-      conversationMembers
+      "conversation members:",
+      await redis.smembers(`conversation:${conversationId}`)
     );
+
     return res.json({ success: true });
   } catch (error) {
-    console.log(error);
+    console.error(error);
+    res.status(500).json({ success: false });
   }
 };
 
-export const messageSent = (req, res) => {
+export const messageSent = async (req, res) => {
   const { conversationId, message } = req.body;
   console.log(conversationId, message);
 
-  const users = conversationMembers.get(conversationId);
+  const users = await redis.smembers(`conversation:${conversationId}`);
   console.log(users);
   if (!users) return res.json({ delivered: 0 });
 
@@ -31,7 +31,7 @@ export const messageSent = (req, res) => {
 
   users.forEach((userId) => {
     const ws = clients.get(userId);
-    console.log(ws)
+    console.log(ws);
     if (ws && ws.readyState === 1) {
       ws.send(
         JSON.stringify({
@@ -42,25 +42,20 @@ export const messageSent = (req, res) => {
       delivered++;
     }
   });
-  console.log(delivered)
+  console.log(delivered);
   res.json({ delivered });
 };
 
-export const ConversationLeave = (req, res) => {
+export const ConversationLeave = async (req, res) => {
   const { conversationId, userId } = req.body;
 
-  const users = conversationMembers.get(conversationId);
-  if (users) {
-    users.delete(userId);
+  await redis.srem(`conversation:${conversationId}`, userId);
 
-    if (users.size === 0) {
-      conversationMembers.delete(conversationId);
-    }
+  const remaining = await redis.scard(`conversation:${conversationId}`);
+
+  if (remaining === 0) {
+    await redis.del(`conversation:${conversationId}`);
   }
 
-  console.log(
-    "conversationMembers during conversation leave----->",
-    conversationMembers
-  );
   res.json({ success: true });
 };
