@@ -5,7 +5,7 @@ export const ConversationInitialization = async (req, res) => {
   try {
     const { conversationId, userId } = req.body;
 
-    await redis.sadd(`conversation:${conversationId}`, userId);   
+    await redis.sadd(`conversation:${conversationId}`, userId);
 
     console.log(
       "conversation members:",
@@ -29,14 +29,20 @@ export const messageSent = async (req, res) => {
 
   let delivered = 0;
 
+  const customMessage = {
+    ...message,
+    group_id: conversationId,
+  };
+
+  console.log(customMessage);
+
   users.forEach((userId) => {
     const ws = clients.get(userId);
-    console.log(ws);
     if (ws && ws.readyState === 1) {
       ws.send(
         JSON.stringify({
           type: "NEW_MESSAGE",
-          payload: message,
+          payload: customMessage,
         })
       );
       delivered++;
