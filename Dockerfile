@@ -7,6 +7,12 @@ RUN npm install --production
 
 COPY . .
 
-EXPOSE 3000
+EXPOSE 8080
 
 CMD ["node", "src/server.js"]
+
+
+
+# docker build -t websocket-server .
+# docker run -p 8080:8080 websocket-server
+

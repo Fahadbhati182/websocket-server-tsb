@@ -14,3 +14,5 @@
 
 5. User closes chat
    └─▶ ConversationLeave
+
+6. Websocket disconnected
